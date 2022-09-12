@@ -1,5 +1,5 @@
 name: docker-spa
-description: This GitHub Action will build your vite app and turn it into a docker container
+description: This GitHub Action will build your node app into a docker container
 author: johnb8005
 branding:
   icon: book-open
@@ -8,24 +8,15 @@ inputs:
   githubtoken:
     description: github token
     default: ${{ github.token }}
-  port:
-    description: docker port token
-    default: 3000
-  distFolder:
-    description: path to dist/build folder
-    default: dist
   nodeversion:
     description: node version
     default: 18
-  html-entry:
-    description: HTML entry point
-    default: index.html
   container-name:
     description: name of the container
     default: ${{ github.event.repository.name }}
   build-command:
     description: build command
-    default: VITE_VERSION=${GITHUB_REF##*/} VITE_GIT_SHA=$GITHUB_SHA yarn build
+    default: yarn build
   message:
     description: The message to prepend the review suggestion
 runs:
@@ -35,15 +26,6 @@ runs:
       with:
         nodeversion: ${{ inputs.nodeversion }}
         build-command: ${{ inputs.build-command }}
-    - name: Gzip
-      run: gzip -r -k ${{ inputs.distFolder }}
-      shell: bash
-    - name: Create httpd.conf (required for Docker)
-      run: echo "E404:${{ inputs.html-entry }}" > httpd.conf
-      shell: bash
-    - name: Create docker file
-      run: printf "FROM lipanski/docker-static-website:2.1.0\nCOPY httpd.conf .\nCOPY ${{ inputs.distFolder }} .\nCMD [\"/busybox\", \"httpd\", \"-f\", \"-v\", \"-p\", \"${{ inputs.port }}\", \"-c\", \"httpd.conf\"]" > Dockerfile
-      shell: bash
     - name: Set env var
       run: echo "DOCKERHUB_URL=$(echo ghcr.io/${GITHUB_REPOSITORY,,}/${{ inputs.container-name }})" >> $GITHUB_ENV
       shell: bash
@@ -51,9 +33,8 @@ runs:
       run: echo "${{ inputs.githubtoken }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
       shell: bash
     - name: Create docker container
-      run: docker build --tag $DOCKERHUB_URL:latest --tag $DOCKERHUB_URL:master --tag $DOCKERHUB_URL:${GITHUB_REF##*/} .
+      run: docker build --build-arg GIT_SHA=$GITHUB_SHA --build-arg GIT_VERSION=${GITHUB_REF##*/} --tag $DOCKERHUB_URL:latest --tag $DOCKERHUB_URL:master --tag $DOCKERHUB_URL:${GITHUB_REF##*/} .
       shell: bash
     - name: Push Docker
       run: docker push --all-tags $DOCKERHUB_URL
       shell: bash
-  
